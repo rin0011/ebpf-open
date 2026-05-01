@@ -19,11 +19,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            clang \
+            llvm \
             pkg-config \
             libelf-dev \
             zlib1g-dev \
             wget \
-            unzip
+            unzip \
+            make
       
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -53,48 +56,99 @@ jobs:
       
       - name: Setup NDK Sysroot
         run: |
-          echo "Setting up NDK Sysroot..."
+          echo "=== Setting up NDK Sysroot ==="
           ./setup_ndk_sysroot.sh
         working-directory: ${{ github.workspace }}
         env:
-          RUST_BACKTRACE: 1
+          RUST_BACKTRACE: full
       
-      - name: Verify sysroot
+      - name: Verify sysroot files
         run: |
           echo "=== Checking sysroot contents ==="
-          ls -la sysroot/lib/ || echo "sysroot/lib not found"
-          ls -la sysroot/include/ || echo "sysroot/include not found"
+          echo "Libs:"
+          ls -lah sysroot/lib/
+          echo ""
+          echo "Includes:"
+          ls -lah sysroot/include/
+          echo ""
+          echo "=== Environment check ==="
+          which clang
+          which llvm-ar
+          which make
         working-directory: ${{ github.workspace }}
       
-      - name: Build Android
+      - name: Build Android binary
         run: |
-          echo "Building for Android..."
+          echo "=== Building for Android (aarch64-linux-android) ==="
+          echo "NDK: $NDK_PATH"
+          echo "SYSROOT_DIR: $(pwd)/sysroot"
           ./build_android.sh
         working-directory: ${{ github.workspace }}
         env:
-          RUST_BACKTRACE: 1
+          RUST_BACKTRACE: full
+          VERBOSE: 1
       
-      - name: Verify Android build
+      - name: Verify Android build output
         run: |
-          echo "=== Checking Android build output ==="
-          ls -la dist/ || echo "dist not found"
+          echo "=== Android build output ==="
+          ls -lah dist/
+          file dist/ebpf-open-android || echo "Binary not found"
         working-directory: ${{ github.workspace }}
       
       - name: Setup Magisk dependencies
         run: |
           mkdir -p ~/musl-cross
           cd ~/musl-cross
+          echo "Downloading musl-cross toolchain..."
           wget -q https://musl.cc/aarch64-linux-musl-cross.tgz
           tar xzf aarch64-linux-musl-cross.tgz --strip-components=1
           echo "MUSL_CROSS=$HOME/musl-cross" >> $GITHUB_ENV
       
-      - name: Build Magisk Module
+      - name: Setup Magisk sysroot (musl)
         run: |
-          echo "Building Magisk module..."
+          echo "=== Setting up musl sysroot ==="
+          PROJECT_DIR="$(pwd)"
+          SYSROOT_DIR="$PROJECT_DIR/sysroot-musl"
+          mkdir -p "$SYSROOT_DIR/lib" "$SYSROOT_DIR/include"
+          
+          # Copy libelf and libz for musl
+          if [ -f "$PROJECT_DIR/sysroot/lib/libelf.a" ]; then
+            cp "$PROJECT_DIR/sysroot/lib/libelf.a" "$SYSROOT_DIR/lib/"
+            cp "$PROJECT_DIR/sysroot/include/libelf.h" "$SYSROOT_DIR/include/"
+            cp "$PROJECT_DIR/sysroot/include/gelf.h" "$SYSROOT_DIR/include/"
+          fi
+          
+          if [ -f "$PROJECT_DIR/sysroot/lib/libz.a" ]; then
+            cp "$PROJECT_DIR/sysroot/lib/libz.a" "$SYSROOT_DIR/lib/"
+            cp "$PROJECT_DIR/sysroot/include/zlib.h" "$SYSROOT_DIR/include/"
+            cp "$PROJECT_DIR/sysroot/include/zconf.h" "$SYSROOT_DIR/include/"
+          fi
+          
+          # Also include elf.h
+          if [ -f "$PROJECT_DIR/sysroot/include/elf.h" ]; then
+            cp "$PROJECT_DIR/sysroot/include/elf.h" "$SYSROOT_DIR/include/"
+          fi
+          
+          echo "musl sysroot contents:"
+          ls -lah "$SYSROOT_DIR/lib/"
+          ls -lah "$SYSROOT_DIR/include/"
+        working-directory: ${{ github.workspace }}
+      
+      - name: Build Magisk module
+        run: |
+          echo "=== Building Magisk module ==="
+          echo "MUSL_CROSS: $MUSL_CROSS"
           ./build_magisk.sh --build
         working-directory: ${{ github.workspace }}
         env:
-          RUST_BACKTRACE: 1
+          RUST_BACKTRACE: full
+          VERBOSE: 1
+      
+      - name: Verify all outputs
+        run: |
+          echo "=== Final build artifacts ==="
+          ls -lah dist/
+        working-directory: ${{ github.workspace }}
       
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
