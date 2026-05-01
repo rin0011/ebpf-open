@@ -1,0 +1,57 @@
+name: Build Android
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      
+      - name: Install Android NDK
+        run: |
+          cd /tmp
+          wget -q https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
+          unzip -q android-ndk-r28c-linux.zip
+          mkdir -p /home/root/ndk
+          mv android-ndk-r28c /home/root/ndk/
+      
+      - name: Setup NDK Sysroot
+        run: |
+          chmod +x ./setup_ndk_sysroot.sh
+          ./setup_ndk_sysroot.sh
+      
+      - name: Build Android
+        run: |
+          chmod +x ./build_android.sh
+          ./build_android.sh
+      
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebpf-open-android
+          path: dist/ebpf-open-android
+          if-no-files-found: error
+      
+      - name: Build Magisk Module
+        run: |
+          chmod +x ./build_magisk.sh
+          ./build_magisk.sh --build
+      
+      - name: Upload Magisk artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ebpf-open-magisk
+          path: dist/ebpf-open-magisk.zip
+          if-no-files-found: error
