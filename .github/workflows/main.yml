@@ -14,6 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            pkg-config \
+            libelf-dev \
+            zlib1g-dev \
+            wget \
+            unzip
+      
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -38,18 +49,52 @@ jobs:
         run: |
           sed -i "s|NDK=/home/root/ndk/android-ndk-r28c|NDK=$HOME/ndk/android-ndk-r28c|g" ./setup_ndk_sysroot.sh
           sed -i "s|NDK=/home/root1/ndk/android-ndk-r28c|NDK=$HOME/ndk/android-ndk-r28c|g" ./build_android.sh
+          sed -i "s|MUSL_CROSS=/home/root1/aarch64-linux-musl-cross|MUSL_CROSS=$HOME/musl-cross|g" ./build_musl.sh
       
       - name: Setup NDK Sysroot
-        run: ./setup_ndk_sysroot.sh
+        run: |
+          echo "Setting up NDK Sysroot..."
+          ./setup_ndk_sysroot.sh
+        working-directory: ${{ github.workspace }}
+        env:
+          RUST_BACKTRACE: 1
+      
+      - name: Verify sysroot
+        run: |
+          echo "=== Checking sysroot contents ==="
+          ls -la sysroot/lib/ || echo "sysroot/lib not found"
+          ls -la sysroot/include/ || echo "sysroot/include not found"
         working-directory: ${{ github.workspace }}
       
       - name: Build Android
-        run: ./build_android.sh
+        run: |
+          echo "Building for Android..."
+          ./build_android.sh
+        working-directory: ${{ github.workspace }}
+        env:
+          RUST_BACKTRACE: 1
+      
+      - name: Verify Android build
+        run: |
+          echo "=== Checking Android build output ==="
+          ls -la dist/ || echo "dist not found"
         working-directory: ${{ github.workspace }}
       
+      - name: Setup Magisk dependencies
+        run: |
+          mkdir -p ~/musl-cross
+          cd ~/musl-cross
+          wget -q https://musl.cc/aarch64-linux-musl-cross.tgz
+          tar xzf aarch64-linux-musl-cross.tgz --strip-components=1
+          echo "MUSL_CROSS=$HOME/musl-cross" >> $GITHUB_ENV
+      
       - name: Build Magisk Module
-        run: ./build_magisk.sh --build
+        run: |
+          echo "Building Magisk module..."
+          ./build_magisk.sh --build
         working-directory: ${{ github.workspace }}
+        env:
+          RUST_BACKTRACE: 1
       
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
