@@ -21,11 +21,11 @@ jobs:
       
       - name: Install Android NDK
         run: |
-          cd /tmp
+          mkdir -p ~/ndk
+          cd ~/ndk
           wget -q https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
           unzip -q android-ndk-r28c-linux.zip
-          mkdir -p /home/root/ndk
-          mv android-ndk-r28c /home/root/ndk/
+          echo "NDK_PATH=$HOME/ndk/android-ndk-r28c" >> $GITHUB_ENV
       
       - name: Grant execute permissions
         run: |
@@ -33,6 +33,11 @@ jobs:
           chmod +x ./build_android.sh
           chmod +x ./build_magisk.sh
           chmod +x ./build_musl.sh
+      
+      - name: Update NDK paths in scripts
+        run: |
+          sed -i "s|NDK=/home/root/ndk/android-ndk-r28c|NDK=$HOME/ndk/android-ndk-r28c|g" ./setup_ndk_sysroot.sh
+          sed -i "s|NDK=/home/root1/ndk/android-ndk-r28c|NDK=$HOME/ndk/android-ndk-r28c|g" ./build_android.sh
       
       - name: Setup NDK Sysroot
         run: ./setup_ndk_sysroot.sh
