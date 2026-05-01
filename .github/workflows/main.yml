@@ -27,31 +27,28 @@ jobs:
           mkdir -p /home/root/ndk
           mv android-ndk-r28c /home/root/ndk/
       
-      - name: Setup NDK Sysroot
+      - name: Grant execute permissions
         run: |
           chmod +x ./setup_ndk_sysroot.sh
-          ./setup_ndk_sysroot.sh
+          chmod +x ./build_android.sh
+          chmod +x ./build_magisk.sh
+          chmod +x ./build_musl.sh
+      
+      - name: Setup NDK Sysroot
+        run: ./setup_ndk_sysroot.sh
+        working-directory: ${{ github.workspace }}
       
       - name: Build Android
-        run: |
-          chmod +x ./build_android.sh
-          ./build_android.sh
-      
-      - name: Upload Android artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ebpf-open-android
-          path: dist/ebpf-open-android
-          if-no-files-found: error
+        run: ./build_android.sh
+        working-directory: ${{ github.workspace }}
       
       - name: Build Magisk Module
-        run: |
-          chmod +x ./build_magisk.sh
-          ./build_magisk.sh --build
+        run: ./build_magisk.sh --build
+        working-directory: ${{ github.workspace }}
       
-      - name: Upload Magisk artifact
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ebpf-open-magisk
-          path: dist/ebpf-open-magisk.zip
+          name: ebpf-open-builds
+          path: dist/
           if-no-files-found: error
